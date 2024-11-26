@@ -1,16 +1,17 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from openai import OpenAI
-import openai
 # python-dotenv .env를 사용하기 위한 패키지
 from dotenv import load_dotenv
 import os
+
+import re  # 정규 표현식을 위한 라이브러리
 
 # .env 파일 로드
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:3000"])
+CORS(app, origins=["https://www.dongjinhub.store"])
 
 # OpenAI API 키를 설정
 api_key = os.getenv("OPENAI_ASSISTANT_API_KEY")
@@ -30,7 +31,7 @@ def send_message():
         thread = client.beta.threads.create()
 
         # 어시스턴트에게 제공할 세부 지침 작성
-        instructions = """임동진에 관한 질문을 하면 간단하고 친절하게 답변합니다."""
+        instructions = """임동진에 대해서 소개해줘 한국어로"""
         
         # Assistant에 대한 요청 수행
         run = client.beta.threads.runs.create_and_poll(
@@ -58,14 +59,16 @@ def send_message():
             if hasattr(content_block.text, 'value'):  # Text 객체가 있는지 확인
                 response_content += content_block.text.value  # Text 객체에서 값을 가져옴
 
+        response_content = re.sub(r'【\d+:\d+†source】', '', response_content)
+        response_content = re.sub(r'\[\d+:\d+\†source\]', '', response_content)
+
         # 디버깅을 위해 내용 로그 출력
         # print(thread_messages)
 
-        # 추출한 텍스트를 JSON 형식으로 반환
-        return jsonify({"response": thread_messages.data[0].content[0].text.value}), 200
+        return jsonify({"response": response_content.strip()}), 200
 
     except Exception as e:
-        print(f"Error: {str(e)}")  # 디버깅을 위한 로그 출력
+        # print(f"Error: {str(e)}")  # 디버깅을 위한 로그 출력
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
