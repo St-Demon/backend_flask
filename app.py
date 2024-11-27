@@ -9,13 +9,13 @@ import re  # 정규 표현식을 위한 라이브러리
 load_dotenv()
 
 app = Flask(__name__)
-# CORS(app, origins=["http://localhost:3000", "https://www.dongjinhub.store"])
+CORS(app, origins=["http://localhost:3000", "https://www.dongjinhub.store", "https://www.backend.dongjinhub.store"])
 
-@app.after_request
-def add_cors_headers(response):
-    response.headers['Access-Control-Allow-Origin'] = 'https://www.dongjinhub.store'  # 클라이언트 도메인
-    response.headers['Access-Control-Allow-Credentials'] = 'true'
-    return response
+# @app.after_request
+# def add_cors_headers(response):
+#     response.headers['Access-Control-Allow-Origin'] = 'https://www.dongjinhub.store'
+#     response.headers['Access-Control-Allow-Credentials'] = 'true'
+#     return response
 
 
 # OpenAI API 키 설정
