@@ -9,7 +9,8 @@ import re  # 정규 표현식을 위한 라이브러리
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, origins=["https://www.dongjinhub.store"])
+CORS(app)
+CORS(app, origins=["https://www.dongjinhub.store", "http://localhost:3000"])
 
 # OpenAI API 키 설정
 api_key = os.getenv("OPENAI_ASSISTANT_API_KEY")
