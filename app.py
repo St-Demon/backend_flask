@@ -23,6 +23,7 @@ def send_message():
     
     # 디버깅용 메시지 출력
     print("Received message:", user_message)
+    app.logger.debug(f"Received message: {user_message}")
 
     if not user_message:
         return jsonify({"error": "메시지가 제공되지 않았습니다."}), 400
