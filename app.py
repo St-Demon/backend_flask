@@ -10,7 +10,7 @@ load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
-CORS(app, origins=["https://www.dongjinhub.store", "http://localhost:3000"])
+CORS(app, origins=["https://www.dongjinhub.store/"])
 
 # OpenAI API 키 설정
 api_key = os.getenv("OPENAI_ASSISTANT_API_KEY")
@@ -71,4 +71,4 @@ def send_message():
 
 if __name__ == '__main__':
     # Flask가 모든 인터페이스에서 접속할 수 있도록 설정하고, 포트 5000에서 실행
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(debug=True)
