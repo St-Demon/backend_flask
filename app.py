@@ -26,6 +26,9 @@ client = OpenAI(api_key=api_key)
 
 @app.route('/chat', methods=['POST'])
 def send_message():
+    origin = request.headers.get('Origin')
+    print(f"Request Origin: {origin}")
+
     user_message = request.json.get('message')  # 프론트엔드에서 보내는 메시지 키는 'message'
     
     # 디버깅용 메시지 출력
