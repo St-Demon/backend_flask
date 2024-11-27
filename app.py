@@ -21,6 +21,8 @@ client = OpenAI(api_key=api_key)
 
 @app.route('/chat', methods=['POST'])
 def send_message():
+    # 오류 확인하기 위해서
+    print("Received message:", user_message) 
     user_message = request.json.get('message')  # 프론트엔드에서 보내는 메시지 키는 'message'
 
     if not user_message:
