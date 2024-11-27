@@ -1,10 +1,8 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from openai import OpenAI
-# python-dotenv .env를 사용하기 위한 패키지
 from dotenv import load_dotenv
 import os
-
 import re  # 정규 표현식을 위한 라이브러리
 
 # .env 파일 로드
@@ -13,7 +11,7 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app, origins=["https://www.dongjinhub.store"])
 
-# OpenAI API 키를 설정
+# OpenAI API 키 설정
 api_key = os.getenv("OPENAI_ASSISTANT_API_KEY")
 ASSISTANT_ID = os.getenv("ASSISTANT_ID_LIM")
 
@@ -21,9 +19,10 @@ client = OpenAI(api_key=api_key)
 
 @app.route('/chat', methods=['POST'])
 def send_message():
-    # 오류 확인하기 위해서
-    print("Received message:", user_message) 
     user_message = request.json.get('message')  # 프론트엔드에서 보내는 메시지 키는 'message'
+    
+    # 디버깅용 메시지 출력
+    print("Received message:", user_message)
 
     if not user_message:
         return jsonify({"error": "메시지가 제공되지 않았습니다."}), 400
@@ -50,7 +49,6 @@ def send_message():
             )
             if run.status == "completed":
                 break
-        
 
         # 스레드 내의 메시지들 접근
         thread_messages = client.beta.threads.messages.list(thread.id)
@@ -64,15 +62,11 @@ def send_message():
         response_content = re.sub(r'【\d+:\d+†source】', '', response_content)
         response_content = re.sub(r'\[\d+:\d+\†source\]', '', response_content)
 
-        # 디버깅을 위해 내용 로그 출력
-        # print(thread_messages)
-
         return jsonify({"response": response_content.strip()}), 200
 
     except Exception as e:
-        # print(f"Error: {str(e)}")  # 디버깅을 위한 로그 출력
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
-
+    # Flask가 모든 인터페이스에서 접속할 수 있도록 설정하고, 포트 5000에서 실행
+    app.run(host='0.0.0.0', port=5000, debug=True)
