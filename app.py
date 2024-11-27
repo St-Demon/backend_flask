@@ -9,7 +9,7 @@ import re  # 정규 표현식을 위한 라이브러리
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:3000", "https://www.dongjinhub.store", "https://www.backend.dongjinhub.store"])
+CORS(app, origins=["http://localhost:3000", "https://www.dongjinhub.store", supports_credentials=True])
 
 # @app.after_request
 # def add_cors_headers(response):
