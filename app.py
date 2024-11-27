@@ -8,14 +8,13 @@ import re  # 정규 표현식을 위한 라이브러리
 # .env 파일 로드
 load_dotenv()
 
-
-
 app = Flask(__name__)
 # CORS(app, origins=["http://localhost:3000", "https://www.dongjinhub.store"])
 
 @app.after_request
 def add_cors_headers(response):
     response.headers['Access-Control-Allow-Origin'] = 'https://www.dongjinhub.store'  # 클라이언트 도메인
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
     return response
 
 
@@ -78,5 +77,4 @@ def send_message():
 
 if __name__ == '__main__':
     # Flask가 모든 인터페이스에서 접속할 수 있도록 설정하고, 포트 5000에서 실행
-    app.run(debug=True)
-    # host='0.0.0.0', port=5000, 
+    app.run(host='0.0.0.0', port=5000, debug=True)
