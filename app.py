@@ -79,6 +79,16 @@ def send_message():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+        
+@app.route('/chat', methods=['OPTIONS'])
+def options():
+    response = jsonify({"message": "OK"})
+    response.headers['Access-Control-Allow-Origin'] = 'https://www.dongjinhub.store'
+    response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    return response
+
 
 if __name__ == '__main__':
     # Flask가 모든 인터페이스에서 접속할 수 있도록 설정하고, 포트 5000에서 실행
