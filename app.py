@@ -9,7 +9,7 @@ import re  # 정규 표현식을 위한 라이브러리
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:3000", "https://www.dongjinhub.store"], supports_credentials=True)
+CORS(app, origins=["https://www.dongjinhub.store"], supports_credentials=True)
 
 # OpenAI API 키 설정
 api_key = os.getenv("OPENAI_ASSISTANT_API_KEY")
@@ -19,13 +19,8 @@ client = OpenAI(api_key=api_key)
 
 @app.route('/chat', methods=['POST'])
 def send_message():
-    origin = request.headers.get('Origin')
-    print(f"Request Origin: {origin}")
-
     user_message = request.json.get('message')  # 프론트엔드에서 보내는 메시지 키는 'message'
     
-    # 디버깅용 메시지 출력
-    print("Received message:", user_message)
     app.logger.debug(f"Received message: {user_message}")
 
     if not user_message:
@@ -34,15 +29,11 @@ def send_message():
     try:
         # Thread 생성
         thread = client.beta.threads.create()
-
-        # 어시스턴트에게 제공할 세부 지침 작성
-        instructions = """임동진에 대해서 소개해줘 한국어로"""
         
         # Assistant에 대한 요청 수행
         run = client.beta.threads.runs.create_and_poll(
             thread_id=thread.id,
-            assistant_id=ASSISTANT_ID,
-            instructions=instructions
+            assistant_id=ASSISTANT_ID
         )
 
         # 완료를 기다리며 폴링
@@ -70,17 +61,6 @@ def send_message():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-        
-@app.route('/chat', methods=['OPTIONS'])
-def options():
-    response = jsonify({"message": "OK"})
-    response.headers['Access-Control-Allow-Origin'] = 'https://www.dongjinhub.store'
-    response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-    response.headers['Access-Control-Allow-Credentials'] = 'true'
-    return response
-
 
 if __name__ == '__main__':
-    # Flask가 모든 인터페이스에서 접속할 수 있도록 설정하고, 포트 5000에서 실행
     app.run(host='0.0.0.0', port=5000, debug=True)
