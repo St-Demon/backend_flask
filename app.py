@@ -11,15 +11,6 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app, origins=["http://localhost:3000", "https://www.dongjinhub.store"], supports_credentials=True)
 
-@app.after_request
-def add_cors_headers(response):
-    # 요청한 출처를 확인하여 응답에 헤더 추가
-    origin = request.headers.get('Origin')
-    if origin in ["http://localhost:3000", "https://www.dongjinhub.store"]:
-        response.headers['Access-Control-Allow-Origin'] = origin
-    response.headers['Access-Control-Allow-Credentials'] = 'true'
-    return response
-
 # OpenAI API 키 설정
 api_key = os.getenv("OPENAI_ASSISTANT_API_KEY")
 ASSISTANT_ID = os.getenv("ASSISTANT_ID_LIM")
