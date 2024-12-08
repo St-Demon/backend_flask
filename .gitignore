@@ -2,3 +2,5 @@ __pycache__
 .env
 tset/
 자기소개.txt
+test.py
+mongodb.py

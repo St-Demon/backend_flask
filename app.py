@@ -3,7 +3,10 @@ from flask_cors import CORS
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
-import re  # 정규 표현식을 위한 라이브러리
+import re
+from pymongo import MongoClient
+import certifi
+from datetime import datetime, timezone
 
 # .env 파일 로드
 load_dotenv()
@@ -15,11 +18,17 @@ CORS(app, origins=["https://www.dongjinhub.store"], supports_credentials=True)
 api_key = os.getenv("OPENAI_ASSISTANT_API_KEY")
 ASSISTANT_ID = os.getenv("ASSISTANT_ID_LIM")
 
-client = OpenAI(api_key=api_key)
+# client = OpenAI(api_key=api_key)
+
+# MongoDB 연결 설정
+mongo_uri = os.getenv("MONGODB")
+mongo_client = MongoClient(mongo_uri, tlsCAFile=certifi.where())
+db = mongo_client["chat_database"]
+collection = db["chat_messages"]
 
 @app.route('/chat', methods=['POST'])
 def send_message():
-    user_message = request.json.get('message')  # 프론트엔드에서 보내는 메시지 키는 'message'
+    user_message = request.json.get('message')
     
     app.logger.debug(f"Received message: {user_message}")
 
@@ -51,15 +60,33 @@ def send_message():
         # 어시스턴트의 답변에서 텍스트 추출
         response_content = ""
         for content_block in thread_messages.data[-1].content:
-            if hasattr(content_block.text, 'value'):  # Text 객체가 있는지 확인
-                response_content += content_block.text.value  # Text 객체에서 값을 가져옴
+            if hasattr(content_block.text, 'value'):
+                response_content += content_block.text.value
 
         response_content = re.sub(r'【\d+:\d+†source】', '', response_content)
         response_content = re.sub(r'\[\d+:\d+\†source\]', '', response_content)
 
+        # MongoDB에 질문과 응답 저장
+        chat_data = {
+            "user_message": user_message,
+            "assistant_response": response_content.strip(),
+            "timestamp": datetime.now(timezone.utc),
+            "status": "success"  # 성공 상태
+        }
+        collection.insert_one(chat_data)
+
         return jsonify({"response": response_content.strip()}), 200
 
     except Exception as e:
+        # 오류 정보 저장
+        error_data = {
+            "user_message": user_message,
+            "error_message": str(e),
+            "timestamp": datetime.now(timezone.utc),
+            "status": "error"  # 오류 상태
+        }
+        collection.insert_one(error_data)
+
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
