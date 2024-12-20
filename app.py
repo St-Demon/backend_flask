@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from openai import OpenAI
+import openai
 from dotenv import load_dotenv
 import os
 import re
@@ -37,8 +38,6 @@ def send_message():
 
         # Thread 생성 시 시스템 메시지를 'user' 역할로 추가
         thread = client.beta.threads.create()
-        print(thread.id)
-        print(ASSISTANT_ID)
 
         thread_message = client.beta.threads.messages.create(
         thread.id,
@@ -62,8 +61,6 @@ def send_message():
 
         # 스레드 내의 모든 메시지를 가져와!!
         thread_messages = client.beta.threads.messages.list(thread.id)
-        print(f"스레드 내의 메시지: {thread_messages}")
-        print("1" * 20)
 
         # assistant의 메시지만 가지고 와
         assistant_messages = [
@@ -83,8 +80,6 @@ def send_message():
                 # TextContentBlock 내부 구조 접근
                 if hasattr(content_block, "text") and hasattr(content_block.text, "value"):
                     response_content += content_block.text.value
-                    
-        print(f"Assistant response: {response_content}")  # 디버깅용 출력
 
         response_content = re.sub(r'【\d+:\d+†source】', '', response_content)
         response_content = re.sub(r'\[\d+:\d+\†source\]', '', response_content)
@@ -98,7 +93,21 @@ def send_message():
         }
         collection.insert_one(chat_data)
 
-        return jsonify({"response": response_content.strip()}), 200
+        messages=[
+            {"role": "system", "content": "모든 응답을 JSON 형식으로 출력하세요."},
+            {"role": "user", "content": f"{response_content}, {user_message} 취업을 하기위해서 포토폴리오를 만들었어 사용자가 질문을 하면 나에 대해서 궁금할 것 같은 질문을 3개 추천해줘" },
+        ]
+
+        suggestions_response = client.chat.completions.create(
+            model="gpt-3.5-turbo-1106",
+            messages=messages,
+            response_format={"type": "json_object"},  # 올바른 response_format 설정
+            max_tokens=150
+        )
+        suggestions_response = suggestions_response.choices[0].message.content
+        print(suggestions_response)
+
+
 
     except Exception as e:
         # 오류 정보 저장
