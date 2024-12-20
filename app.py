@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from openai import OpenAI
-import openai
 from dotenv import load_dotenv
 import os
 import re
@@ -83,6 +82,7 @@ def send_message():
 
         response_content = re.sub(r'【\d+:\d+†source】', '', response_content)
         response_content = re.sub(r'\[\d+:\d+\†source\]', '', response_content)
+        print(response_content)
 
         # MongoDB에 질문과 응답 저장
         chat_data = {
@@ -93,9 +93,32 @@ def send_message():
         }
         collection.insert_one(chat_data)
 
-        messages=[
-            {"role": "system", "content": "모든 응답을 JSON 형식으로 출력하세요."},
-            {"role": "user", "content": f"{response_content}, {user_message} 취업을 하기위해서 포토폴리오를 만들었어 사용자가 질문을 하면 나에 대해서 궁금할 것 같은 질문을 3개 추천해줘" },
+        # messages=[
+        #     {"role": "system", "content": "모든 응답을 JSON 형식으로 출력하세요."},
+        #     {"role": "user", "content": f"{response_content}, {user_message} 취업을 하기위해서 포토폴리오를 만들었어 사용자가 질문을 하면 나에 대해서 궁금할 것 같은 질문을 3개 추천해줘" },
+        # ]
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "아래 예시와 정확히 동일한 JSON 형식으로만 응답하세요.\n"
+                    "JSON 외의 다른 텍스트나 설명을 포함하지 마세요.\n\n"
+                    "{\n"
+                    "  \"추천질문\": [\n"
+                    "    \"질문1\",\n"
+                    "    \"질문2\",\n"
+                    "    \"질문3\"\n"
+                    "  ]\n"
+                    "}"
+                )
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"{response_content}, {user_message} 이 사용자에 대해서 궁금할만한 3가지 질문만 "
+                    "\"추천질문\" 배열에 담아 JSON으로 반환하세요."
+                )
+            }
         ]
 
         suggestions_response = client.chat.completions.create(
@@ -104,9 +127,13 @@ def send_message():
             response_format={"type": "json_object"},  # 올바른 response_format 설정
             max_tokens=150
         )
-        suggestions_response = suggestions_response.choices[0].message.content
-        print(suggestions_response)
+        suggestions_content = suggestions_response.choices[0].message.content
+        print(suggestions_content)
 
+        return jsonify({
+            "response": response_content.strip(),
+            "suggestions_content1": suggestions_content
+        }), 200
 
 
     except Exception as e:
