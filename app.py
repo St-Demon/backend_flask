@@ -82,7 +82,6 @@ def send_message():
 
         response_content = re.sub(r'【\d+:\d+†source】', '', response_content)
         response_content = re.sub(r'\[\d+:\d+\†source\]', '', response_content)
-        print(response_content)
 
         # MongoDB에 질문과 응답 저장
         chat_data = {
@@ -93,10 +92,6 @@ def send_message():
         }
         collection.insert_one(chat_data)
 
-        # messages=[
-        #     {"role": "system", "content": "모든 응답을 JSON 형식으로 출력하세요."},
-        #     {"role": "user", "content": f"{response_content}, {user_message} 취업을 하기위해서 포토폴리오를 만들었어 사용자가 질문을 하면 나에 대해서 궁금할 것 같은 질문을 3개 추천해줘" },
-        # ]
         messages = [
             {
                 "role": "system",
