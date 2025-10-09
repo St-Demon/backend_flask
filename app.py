@@ -12,7 +12,12 @@ import certifi, os, re, time, logging
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, origins=["https://www.dongjinhub.store", "http://localhost:3000"], supports_credentials=True)
+CORS(app, origins=[
+  "https://dongjinhub.store",
+  "https://www.dongjinhub.store",
+  "https://api.dongjinhub.store",
+  "http://localhost:3000",
+], supports_credentials=True)
 logging.basicConfig(level=logging.INFO)
 
 # OpenAI
