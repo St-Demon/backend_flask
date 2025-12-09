@@ -1,31 +1,33 @@
-# app.py
+import os
+import re
+import time
+import logging
+import certifi
+from datetime import datetime, timezone
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from openai import OpenAI
 from dotenv import load_dotenv
-from datetime import datetime, timezone
+from openai import OpenAI
 from pymongo import MongoClient
 from pymongo.server_api import ServerApi
-import certifi, os, re, time, logging
 
-# env
+# 1. 환경 변수 및 설정
 load_dotenv()
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 CORS(app, origins=[
-  "https://dongjinhub.store",
-  "https://www.dongjinhub.store",
-  "https://api.dongjinhub.store",
-  "http://localhost:3000",
+    "https://dongjinhub.store",
+    "https://www.dongjinhub.store",
+    "http://localhost:3000",
 ], supports_credentials=True)
-logging.basicConfig(level=logging.INFO)
 
-# OpenAI
-API_KEY = os.getenv("OPENAI_ASSISTANT_API_KEY")
+# OpenAI 설정
+client = OpenAI(api_key=os.getenv("OPENAI_ASSISTANT_API_KEY"))
 ASSISTANT_ID = os.getenv("ASSISTANT_ID_LIM")
-client = OpenAI(api_key=API_KEY)
 
-# MongoDB
+# MongoDB 설정
 MONGO_URI = os.getenv("MONGODB")
 DB_NAME = os.getenv("DATABASE_NAME", "portfolio_chat")
 COLL_NAME = os.getenv("COLLECTION_NAME", "chat_messages")
@@ -33,177 +35,147 @@ COLL_NAME = os.getenv("COLLECTION_NAME", "chat_messages")
 mongo = None
 collection = None
 
-def _mask_uri(u: str) -> str:
-    if not u: 
-        return ""
-    try:
-        # 비밀번호만 마스킹
-        if "://" in u and "@" in u:
-            prefix, rest = u.split("://", 1)
-            cred_host = rest.split("@", 1)
-            if len(cred_host) == 2:
-                creds, host = cred_host
-                if ":" in creds:
-                    user, _ = creds.split(":", 1)
-                    creds_masked = f"{user}:***"
-                else:
-                    creds_masked = "***"
-                return f"{prefix}://{creds_masked}@{host}"
-    except Exception:
-        pass
-    return u
-
+# 2. 데이터베이스 관련 함수
 def connect_mongo():
-    """MongoDB 연결 (성공 시 전역 collection 설정)"""
+    """MongoDB 연결 초기화"""
     global mongo, collection
     if not MONGO_URI:
-        app.logger.info("MongoDB 비활성화: MONGODB 환경변수가 없음")
+        logger.info("MongoDB URI 없음 - DB 비활성화")
         return
 
-    app.logger.info(f"Mongo URI (masked) = {_mask_uri(MONGO_URI)}")
     try:
         mongo = MongoClient(
             MONGO_URI,
             server_api=ServerApi('1'),
             tlsCAFile=certifi.where(),
-            serverSelectionTimeoutMS=7000,
+            serverSelectionTimeoutMS=5000
         )
-        # 연결/인증 확인
-        pong = mongo.admin.command("ping")
-        app.logger.info(f"Mongo ping OK => {pong}")
-
-        db = mongo[DB_NAME]
-        collection = db[COLL_NAME]
-
-        # 인덱스(시간 정렬/조회용)
-        try:
-            collection.create_index("timestamp")
-            collection.create_index("thread_id")
-        except Exception as ie:
-            app.logger.warning(f"인덱스 생성 경고(무시): {ie}")
-
+        mongo.admin.command("ping") # 연결 테스트
+        collection = mongo[DB_NAME][COLL_NAME]
+        logger.info("✅ MongoDB 연결 성공")
     except Exception as e:
-        app.logger.error(f"❌ MongoDB 연결 실패: {e}")
+        logger.error(f"❌ MongoDB 연결 실패: {e}")
         mongo = None
         collection = None
 
-def save_chat(user_message: str, ai_response: str, thread_id: str | None):
-    """정상 응답 저장"""
-    if collection is None:
-        return False
+def save_to_mongo(user_msg, ai_msg, thread_id, status="success", error_msg=None):
+    """채팅 로그 저장 (성공/실패 통합)"""
+    if collection is None: return
+
     doc = {
-        "user_message": user_message,
-        "assistant_response": ai_response,
+        "user_message": user_msg,
+        "assistant_response": ai_msg,
+        "error_message": error_msg,
         "thread_id": thread_id,
         "timestamp": datetime.now(timezone.utc),
-        "status": "success",
+        "status": status,
     }
     try:
         collection.insert_one(doc)
-        return True
     except Exception as e:
-        app.logger.warning(f"Mongo 저장 실패(무시): {e}")
-        return False
+        logger.warning(f"DB 저장 실패: {e}")
 
-def save_error(user_message: str, err_msg: str, thread_id: str | None):
-    """에러 로그 저장"""
-    if collection is None:
-        return False
-    doc = {
-        "user_message": user_message,
-        "error_message": err_msg,
-        "thread_id": thread_id,
-        "timestamp": datetime.now(timezone.utc),
-        "status": "error",
-    }
-    try:
-        collection.insert_one(doc)
-        return True
-    except Exception as e:
-        app.logger.warning(f"Mongo 오류 로그 저장 실패(무시): {e}")
-        return False
-
-# 앱 시작 시 1회 연결
+# 앱 시작 시 DB 연결
 connect_mongo()
 
-# -------- 유틸 --------
-def clean_sources(text: str) -> str:
-    text = re.sub(r'【\d+:\d+†source】', '', text or '')
-    text = re.sub(r'\[\d+:\d+†source\]', '', text or '')
-    return (text or '').strip()
+# 3. OpenAI 관련 헬퍼 함수
+def clean_text(text):
+    """OpenAI 응답에서 불필요한 소스 표기 제거"""
+    if not text: return ""
+    text = re.sub(r'【\d+:\d+†source】', '', text)
+    text = re.sub(r'\[\d+:\d+†source\]', '', text)
+    return text.strip()
 
-# -------- API --------
-@app.route("/chat", methods=["POST"])
-def chat():
-    data = request.get_json(silent=True) or {}
-    user_message = (data.get("message") or "").strip()
-    if not user_message:
-        return jsonify({"error": "메시지가 제공되지 않았습니다."}), 400
-
-    thread_id = None
-    try:
-        # Assistants 실행
+def run_assistant(user_message, thread_id=None):
+    """Assistant 실행 및 응답 대기"""
+    # 1. 스레드 생성 또는 사용
+    if not thread_id:
         thread = client.beta.threads.create()
         thread_id = thread.id
 
-        client.beta.threads.messages.create(thread.id, role="user", content=user_message)
-        run = client.beta.threads.runs.create(thread_id=thread.id, assistant_id=ASSISTANT_ID)
+    # 2. 메시지 추가 및 실행
+    client.beta.threads.messages.create(thread_id, role="user", content=user_message)
+    run = client.beta.threads.runs.create(thread_id=thread_id, assistant_id=ASSISTANT_ID)
 
-        # 폴링
-        deadline = time.time() + 60
-        while True:
-            r = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)
-            if r.status == "completed":
-                break
-            if r.status in ("failed", "cancelled", "expired") or time.time() > deadline:
-                err = f"assistant run {r.status}"
-                save_error(user_message, err, thread_id)
-                return jsonify({"error": err}), 500
-            time.sleep(0.25)
+    # 3. 실행 완료 대기 (Polling)
+    start_time = time.time()
+    while time.time() - start_time < 60: # 60초 타임아웃
+        run_status = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run.id)
+        
+        if run_status.status == "completed":
+            break
+        if run_status.status in ["failed", "cancelled", "expired"]:
+            error_detail = run_status.last_error if run_status.status == "failed" else "Unknown"
+            raise Exception(f"Assistant Run Failed: {run_status.status} ({error_detail})")
+        
+        time.sleep(0.5)
+    
+    # 4. 응답 메시지 추출
+    messages = client.beta.threads.messages.list(thread_id)
+    last_msg = next((m for m in messages if m.run_id == run.id and m.role == "assistant"), None)
+    
+    if not last_msg:
+        return "응답을 생성하지 못했습니다.", thread_id
 
-        # 응답 추출
-        msgs = client.beta.threads.messages.list(thread.id).data
-        msgs = [m for m in msgs if m.run_id == run.id and m.role == "assistant"]
-        content = ""
-        if msgs:
-            for block in (msgs[-1].content or []):
-                if getattr(block, "text", None) and getattr(block.text, "value", None):
-                    content += block.text.value
-        response_text = clean_sources(content) or "No response from assistant."
+    response_content = last_msg.content[0].text.value
+    return clean_text(response_content), thread_id
 
-        # 저장
-        save_chat(user_message, response_text, thread_id)
+def generate_suggestions(context_text):
+    """GPT-3.5를 사용하여 추천 질문 생성 (JSON)"""
+    try:
+        sys_prompt = 'JSON 형식으로만 응답하세요: {"추천질문": ["질문1", "질문2", "질문3"]}'
+        user_prompt = f"내용: {context_text[:500]}... \n이 내용과 관련하여 사용자가 할법한 질문 3가지를 추천해줘."
+        
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo-1106",
+            messages=[
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=150
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        logger.warning(f"추천 질문 생성 실패: {e}")
+        return "{}"
 
-        # 추천질문(JSON만)
-        sys_prompt = '아래 예시와 동일한 JSON으로만 응답하세요.\n{"추천질문": ["질문1","질문2","질문3"]}'
-        follow = [
-            {"role": "system", "content": sys_prompt},
-            {"role": "user", "content": f'{response_text}, {user_message} 이 사용자에 대해 궁금한 3가지를 "추천질문" 배열 JSON으로만 반환'},
-        ]
-        suggestions = "{}"
-        try:
-            sres = client.chat.completions.create(
-                model="gpt-3.5-turbo-1106",
-                messages=follow,
-                response_format={"type": "json_object"},
-                max_tokens=150,
-            )
-            suggestions = sres.choices[0].message.content
-        except Exception as se:
-            app.logger.warning(f"추천질문 생성 실패(무시): {se}")
+# 4. API 라우트
+@app.route("/chat", methods=["POST"])
+def chat():
+    data = request.get_json(silent=True) or {}
+    user_message = data.get("message", "").strip()
 
-        return jsonify({"response": response_text, "suggestions_content1": suggestions}), 200
+    if not user_message:
+        return jsonify({"error": "메시지가 없습니다."}), 400
+
+    try:
+        # 1. Assistant 실행
+        response_text, thread_id = run_assistant(user_message)
+
+        # 2. 추천 질문 생성 (병렬 처리가 아니므로 응답 속도 고려 필요)
+        suggestions = generate_suggestions(response_text)
+
+        # 3. DB 저장 (성공)
+        save_to_mongo(user_message, response_text, thread_id, status="success")
+
+        return jsonify({
+            "response": response_text,
+            "suggestions_content1": suggestions
+        }), 200
 
     except Exception as e:
-        save_error(user_message, str(e), thread_id)
+        logger.error(f"Chat Error: {e}")
+        # DB 저장 (에러)
+        save_to_mongo(user_message, None, None, status="error", error_msg=str(e))
         return jsonify({"error": str(e)}), 500
 
-# 헬스 체크
 @app.route("/health", methods=["GET"])
 def health():
-    mongo_status = "not_initialized" if collection is None else "ok"
-    return jsonify({"ok": True, "mongo": mongo_status}), 200
+    return jsonify({
+        "ok": True,
+        "mongo": "connected" if collection is not None else "disconnected"
+    }), 200
 
 if __name__ == "__main__":
-    # 개발 서버
     app.run(host="0.0.0.0", port=5000, debug=True)
